@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Plus, Refrigerator, Search } from 'lucide-react';
+import { lazy, Suspense, useMemo, useState } from 'react';
+import { Barcode, Plus, Refrigerator, Search } from 'lucide-react';
 import { useAppState } from '../../context/AppContext';
 import type { Category, InventoryItem, Location } from '../../types';
 import { CATEGORIES, CATEGORY_LABELS, LOCATIONS, LOCATION_LABELS } from '../../types';
@@ -11,6 +11,10 @@ import { Button } from '../ui/Buttons';
 import { inputClass, selectClass } from '../ui/FormField';
 import { getItemFlags } from '../../lib/status';
 
+const BarcodeScannerModal = lazy(() =>
+  import('./BarcodeScannerModal').then((m) => ({ default: m.BarcodeScannerModal })),
+);
+
 type SortMode = 'name' | 'status';
 
 export function PantryTab() {
@@ -21,6 +25,7 @@ export function PantryTab() {
   const [sort, setSort] = useState<SortMode>('status');
   const [editingItem, setEditingItem] = useState<InventoryItem | null | undefined>(undefined);
   const [deletingItem, setDeletingItem] = useState<InventoryItem | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   const filtered = useMemo(() => {
     let items = state.inventory.filter((item) => {
@@ -47,9 +52,14 @@ export function PantryTab() {
             {state.inventory.length} item{state.inventory.length === 1 ? '' : 's'} tracked
           </p>
         </div>
-        <Button variant="primary" icon={<Plus size={17} />} onClick={() => setEditingItem(null)}>
-          Add Item
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" icon={<Barcode size={17} />} onClick={() => setScanning(true)}>
+            Scan Barcode
+          </Button>
+          <Button variant="primary" icon={<Plus size={17} />} onClick={() => setEditingItem(null)}>
+            Add Item
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
@@ -127,6 +137,12 @@ export function PantryTab() {
 
       {editingItem !== undefined && (
         <ItemFormModal item={editingItem ?? undefined} onClose={() => setEditingItem(undefined)} />
+      )}
+
+      {scanning && (
+        <Suspense fallback={null}>
+          <BarcodeScannerModal onClose={() => setScanning(false)} />
+        </Suspense>
       )}
 
       {deletingItem && (

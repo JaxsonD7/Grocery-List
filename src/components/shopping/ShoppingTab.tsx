@@ -1,5 +1,5 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
-import { Barcode, ListChecks, Plus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ListChecks, Plus } from 'lucide-react';
 import { useAppState } from '../../context/AppContext';
 import type { ShoppingListItem } from '../../types';
 import { ShoppingItemRow } from './ShoppingItemRow';
@@ -8,15 +8,10 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { EmptyState } from '../ui/EmptyState';
 import { Button } from '../ui/Buttons';
 
-const BarcodeScannerModal = lazy(() =>
-  import('./BarcodeScannerModal').then((m) => ({ default: m.BarcodeScannerModal })),
-);
-
 export function ShoppingTab({ onGoToCart }: { onGoToCart: () => void }) {
   const { state, dispatch } = useAppState();
   const [editingItem, setEditingItem] = useState<ShoppingListItem | null | undefined>(undefined);
   const [deletingItem, setDeletingItem] = useState<ShoppingListItem | null>(null);
-  const [scanning, setScanning] = useState(false);
 
   const visible = useMemo(() => state.shoppingList.filter((i) => !i.inCart), [state.shoppingList]);
   const unchecked = visible.filter((i) => !i.checked);
@@ -38,9 +33,6 @@ export function ShoppingTab({ onGoToCart }: { onGoToCart: () => void }) {
               View Cart ({cartCount})
             </Button>
           )}
-          <Button variant="secondary" icon={<Barcode size={17} />} onClick={() => setScanning(true)}>
-            Scan Barcode
-          </Button>
           <Button variant="primary" icon={<Plus size={17} />} onClick={() => setEditingItem(null)}>
             Add Item
           </Button>
@@ -93,12 +85,6 @@ export function ShoppingTab({ onGoToCart }: { onGoToCart: () => void }) {
 
       {editingItem !== undefined && (
         <ShoppingItemFormModal item={editingItem ?? undefined} onClose={() => setEditingItem(undefined)} />
-      )}
-
-      {scanning && (
-        <Suspense fallback={null}>
-          <BarcodeScannerModal onClose={() => setScanning(false)} />
-        </Suspense>
       )}
 
       {deletingItem && (

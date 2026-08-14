@@ -22,7 +22,6 @@ type Action =
   | { type: 'UPDATE_MEAL'; id: string; updates: Partial<Meal> }
   | { type: 'DELETE_MEAL'; id: string }
   | { type: 'MAKE_MEAL'; mealId: string }
-  | { type: 'ADD_CART_ITEM'; item: Omit<CartItem, 'id' | 'shoppingListItemId'> }
   | { type: 'ADD_SHOPPING_ITEM'; item: ShoppingListInput }
   | { type: 'UPDATE_SHOPPING_ITEM'; id: string; updates: Partial<ShoppingListItem> }
   | { type: 'DELETE_SHOPPING_ITEM'; id: string }
@@ -149,11 +148,6 @@ function reducer(state: AppState, action: Action): AppState {
         shoppingList,
         mealHistory: [historyEntry, ...state.mealHistory],
       };
-    }
-
-    case 'ADD_CART_ITEM': {
-      const cartItem: CartItem = { ...action.item, id: uuid(), shoppingListItemId: null };
-      return { ...state, cart: [...state.cart, cartItem] };
     }
 
     case 'ADD_SHOPPING_ITEM':

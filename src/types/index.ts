@@ -116,6 +116,7 @@ export interface InventoryItem {
   lowStockBehavior: LowStockBehavior;
   expirationDate: string | null; // ISO date string
   notes: string;
+  barcode?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -152,15 +153,6 @@ export interface ShoppingListItem {
   createdAt: string;
 }
 
-export interface ProductHealthInfo {
-  score: number; // 0-100, higher is healthier
-  grade: string | null; // Nutri-Score letter (a-e) when available
-  brand: string | null;
-  pros: string[];
-  cons: string[];
-  raisedInfo: string | null; // sourcing/farming info, e.g. "Organic, Free-range"
-}
-
 export interface CartItem {
   id: string;
   shoppingListItemId: string | null;
@@ -170,8 +162,6 @@ export interface CartItem {
   category: Category;
   notes: string;
   linkedInventoryItemId: string | null;
-  barcode?: string | null;
-  health?: ProductHealthInfo | null;
 }
 
 export interface MealHistoryItem {

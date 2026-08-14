@@ -1,24 +1,31 @@
-import type { Category, ProductHealthInfo, Unit } from '../types';
+import type { Category, Location, Unit } from '../types';
+
+export type QualityTier = 'Excellent' | 'Good' | 'Fair' | 'Unknown';
+
+export interface ProductQuality {
+  score: number; // 0-100, higher = better sourced / less processed
+  tier: QualityTier;
+  pros: string[];
+  cons: string[];
+  raisedInfo: string | null; // sourcing/farming description, e.g. "Grass-fed, Pasture-raised"
+}
 
 export interface ProductLookupResult {
   barcode: string;
   name: string;
+  brand: string | null;
+  imageUrl: string | null;
   quantityText: string | null;
   suggestedCategory: Category;
+  suggestedLocation: Location;
   suggestedUnit: Unit;
-  health: ProductHealthInfo;
-}
-
-interface OpenFoodFactsNutriments {
-  [key: string]: number | undefined;
+  quality: ProductQuality;
 }
 
 interface OpenFoodFactsProduct {
   product_name?: string;
   generic_name?: string;
   brands?: string;
-  nutriscore_grade?: string;
-  nutriscore_score?: number;
   nova_group?: number;
   ingredients_text?: string;
   labels_tags?: string[];
@@ -26,7 +33,9 @@ interface OpenFoodFactsProduct {
   origins_tags?: string[];
   categories_tags?: string[];
   quantity?: string;
-  nutriments?: OpenFoodFactsNutriments;
+  image_front_small_url?: string;
+  image_small_url?: string;
+  additives_tags?: string[];
 }
 
 interface OpenFoodFactsResponse {
@@ -34,21 +43,25 @@ interface OpenFoodFactsResponse {
   product?: OpenFoodFactsProduct;
 }
 
-const RAISED_LABEL_MAP: Record<string, string> = {
-  'en:organic': 'Organic',
-  'en:fair-trade': 'Fair trade',
-  'en:free-range': 'Free-range',
-  'en:free-range-eggs': 'Free-range',
-  'en:cage-free': 'Cage-free',
-  'en:pasture-raised': 'Pasture-raised',
-  'en:grass-fed': 'Grass-fed',
-  'en:wild-caught': 'Wild-caught',
-  'en:non-gmo': 'Non-GMO',
-  'en:rainforest-alliance': 'Rainforest Alliance certified',
-  'en:vegan': 'Vegan',
-  'en:vegetarian': 'Vegetarian',
-  'en:sustainable-seafood': 'Sustainably sourced seafood',
-  'en:animal-welfare': 'Animal welfare certified',
+// Labels that speak to *how* the food was raised or grown, not nutrition content.
+const RAISED_LABEL_MAP: Record<string, { text: string; points: number }> = {
+  'en:organic': { text: 'Organic', points: 20 },
+  'en:eu-organic': { text: 'Organic', points: 20 },
+  'en:grass-fed': { text: 'Grass-fed', points: 22 },
+  'en:pasture-raised': { text: 'Pasture-raised', points: 22 },
+  'en:free-range': { text: 'Free-range', points: 16 },
+  'en:free-range-eggs': { text: 'Free-range', points: 16 },
+  'en:cage-free': { text: 'Cage-free', points: 12 },
+  'en:wild-caught': { text: 'Wild-caught', points: 18 },
+  'en:sustainable-seafood': { text: 'Sustainably fished', points: 14 },
+  'en:non-gmo': { text: 'Non-GMO', points: 10 },
+  'en:no-gmos': { text: 'Non-GMO', points: 10 },
+  'en:fair-trade': { text: 'Fair trade', points: 8 },
+  'en:animal-welfare': { text: 'Animal welfare certified', points: 12 },
+  'en:regenerative-agriculture': { text: 'Regenerative agriculture (builds soil health)', points: 22 },
+  'en:rainforest-alliance': { text: 'Rainforest Alliance certified', points: 8 },
+  'en:no-antibiotics': { text: 'No antibiotics', points: 10 },
+  'en:no-hormones': { text: 'No added hormones', points: 10 },
 };
 
 const CATEGORY_KEYWORDS: [Category, string[]][] = [
@@ -62,6 +75,19 @@ const CATEGORY_KEYWORDS: [Category, string[]][] = [
   ['household', ['cleaning-products', 'household']],
 ];
 
+const LOCATION_BY_CATEGORY: Record<Category, Location> = {
+  produce: 'fridge',
+  dairy: 'fridge',
+  meat: 'fridge',
+  frozen: 'freezer',
+  pantry: 'pantry',
+  snacks: 'pantry',
+  drinks: 'pantry',
+  spices: 'pantry',
+  household: 'other',
+  other: 'pantry',
+};
+
 function guessCategory(categoriesTags: string[] | undefined): Category {
   if (!categoriesTags) return 'other';
   const joined = categoriesTags.join(' ').toLowerCase();
@@ -74,75 +100,92 @@ function guessCategory(categoriesTags: string[] | undefined): Category {
 function guessUnit(quantity: string | undefined): Unit {
   if (!quantity) return 'count';
   const q = quantity.toLowerCase();
-  if (q.includes('ml')) return 'ml';
-  if (q.includes('l')) return 'l';
-  if (q.includes('kg')) return 'kg';
-  if (q.includes('g')) return 'g';
-  if (q.includes('oz')) return 'oz';
-  if (q.includes('lb')) return 'lb';
+  // Word-boundary matching avoids "1 lb" being misread as containing "l" (liters).
+  if (/\bml\b/.test(q)) return 'ml';
+  if (/\bkg\b/.test(q)) return 'kg';
+  if (/\blb(s)?\b/.test(q)) return 'lb';
+  if (/\boz\b/.test(q)) return 'oz';
+  if (/\bg\b/.test(q)) return 'g';
+  if (/\bl\b/.test(q)) return 'l';
   return 'count';
 }
 
-function scoreFromNutriScore(grade: string | undefined, novaGroup: number | undefined): number {
-  const base: Record<string, number> = { a: 90, b: 74, c: 56, d: 36, e: 16 };
-  let score = grade && base[grade.toLowerCase()] !== undefined ? base[grade.toLowerCase()] : 50;
+const ADDITIVE_KEYWORDS = ['artificial flavor', 'artificial color', 'high fructose corn syrup', 'preservative'];
 
-  if (novaGroup === 1) score += 6;
-  else if (novaGroup === 2) score += 2;
-  else if (novaGroup === 3) score -= 8;
-  else if (novaGroup === 4) score -= 16;
-
-  return Math.max(0, Math.min(100, Math.round(score)));
+function tierFromScore(score: number): QualityTier {
+  if (score >= 75) return 'Excellent';
+  if (score >= 55) return 'Good';
+  if (score >= 35) return 'Fair';
+  return 'Unknown';
 }
 
-function buildProsAndCons(n: OpenFoodFactsNutriments, novaGroup: number | undefined, labels: string[]): { pros: string[]; cons: string[] } {
+function assessQuality(
+  product: OpenFoodFactsProduct,
+): ProductQuality {
+  const labels = product.labels_tags ?? [];
+  const matched = labels
+    .map((tag) => RAISED_LABEL_MAP[tag])
+    .filter((v): v is { text: string; points: number } => !!v);
+  const uniqueByText = Array.from(new Map(matched.map((m) => [m.text, m])).values());
+
+  let score = 30; // baseline for a conventionally-sourced, unverified product
   const pros: string[] = [];
   const cons: string[] = [];
 
-  const sugars = n['sugars_100g'];
-  const satFat = n['saturated-fat_100g'];
-  const salt = n['salt_100g'];
-  const fiber = n['fiber_100g'];
-  const proteins = n['proteins_100g'];
-  const energy = n['energy-kcal_100g'];
+  for (const { text, points } of uniqueByText) {
+    score += points;
+    pros.push(text);
+  }
 
-  if (proteins !== undefined && proteins >= 8) pros.push('Good source of protein');
-  if (fiber !== undefined && fiber >= 3) pros.push('High in fiber');
-  if (sugars !== undefined && sugars <= 5) pros.push('Low sugar');
-  if (salt !== undefined && salt <= 0.3) pros.push('Low sodium');
-  if (novaGroup === 1) pros.push('Minimally processed');
-  if (labels.includes('en:organic')) pros.push('Certified organic');
+  if (product.nova_group === 1) {
+    score += 10;
+    pros.push('Minimally processed, close to its natural state');
+  } else if (product.nova_group === 4) {
+    score -= 20;
+    cons.push('Ultra-processed (NOVA group 4) — heavily altered from whole ingredients');
+  }
 
-  if (sugars !== undefined && sugars >= 15) cons.push('High in sugar');
-  if (satFat !== undefined && satFat >= 5) cons.push('High in saturated fat');
-  if (salt !== undefined && salt >= 1.5) cons.push('High in sodium');
-  if (novaGroup === 4) cons.push('Ultra-processed food');
-  if (energy !== undefined && energy >= 400) cons.push('Energy-dense');
+  const additiveCount = product.additives_tags?.length ?? 0;
+  if (additiveCount >= 4) {
+    score -= 10;
+    cons.push(`Contains ${additiveCount} food additives`);
+  }
 
-  if (pros.length === 0) pros.push('No standout nutritional benefits identified');
-  if (cons.length === 0) cons.push('No major nutritional concerns identified');
+  const ingredientsLower = (product.ingredients_text ?? '').toLowerCase();
+  const flaggedIngredients = ADDITIVE_KEYWORDS.filter((kw) => ingredientsLower.includes(kw));
+  if (flaggedIngredients.length > 0) {
+    score -= 8 * flaggedIngredients.length;
+    cons.push(`Ingredients list includes ${flaggedIngredients.join(', ')}`);
+  }
 
-  return { pros, cons };
-}
+  if (pros.length === 0) {
+    pros.push('No sourcing or farming certifications found on this product');
+  }
+  if (cons.length === 0) {
+    cons.push('No red flags found in available ingredient data');
+  }
 
-function buildRaisedInfo(labelsTags: string[] | undefined, origins: string | undefined): string | null {
-  const matched = (labelsTags ?? [])
-    .map((tag) => RAISED_LABEL_MAP[tag])
-    .filter((v): v is string => !!v);
-  const unique = Array.from(new Set(matched));
+  score = Math.max(0, Math.min(100, Math.round(score)));
 
-  const parts: string[] = [];
-  if (unique.length > 0) parts.push(unique.join(', '));
-  if (origins) parts.push(`Origin: ${origins}`);
+  const raisedParts: string[] = [];
+  if (uniqueByText.length > 0) raisedParts.push(uniqueByText.map((m) => m.text).join(', '));
+  if (product.origins) raisedParts.push(`Origin: ${product.origins}`);
 
-  return parts.length > 0 ? parts.join(' · ') : null;
+  return {
+    score,
+    tier: tierFromScore(score),
+    pros,
+    cons,
+    raisedInfo: raisedParts.length > 0 ? raisedParts.join(' · ') : null,
+  };
 }
 
 /** Looks up a scanned barcode against the Open Food Facts public database and
- * derives a simplified health score, pros/cons, and sourcing info for display.
- * Returns null when the barcode isn't found in the database. */
+ * assesses ingredient/sourcing quality — how the food was raised or grown
+ * (organic, grass-fed, pasture-raised, wild-caught, processing level, additive
+ * count) — rather than a nutrition-facts score. Returns null when not found. */
 export async function lookupProductByBarcode(barcode: string): Promise<ProductLookupResult | null> {
-  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,generic_name,brands,nutriscore_grade,nutriscore_score,nova_group,ingredients_text,labels_tags,origins,origins_tags,categories_tags,quantity,nutriments`;
+  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,generic_name,brands,nova_group,ingredients_text,labels_tags,origins,origins_tags,categories_tags,quantity,image_front_small_url,image_small_url,additives_tags`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Lookup failed with status ${res.status}`);
@@ -153,23 +196,39 @@ export async function lookupProductByBarcode(barcode: string): Promise<ProductLo
   const name = p.product_name || p.generic_name;
   if (!name) return null;
 
-  const nutriments = p.nutriments ?? {};
-  const labels = p.labels_tags ?? [];
-  const { pros, cons } = buildProsAndCons(nutriments, p.nova_group, labels);
+  const category = guessCategory(p.categories_tags);
 
   return {
     barcode,
     name,
+    brand: p.brands ?? null,
+    imageUrl: p.image_front_small_url ?? p.image_small_url ?? null,
     quantityText: p.quantity ?? null,
-    suggestedCategory: guessCategory(p.categories_tags),
+    suggestedCategory: category,
+    suggestedLocation: LOCATION_BY_CATEGORY[category],
     suggestedUnit: guessUnit(p.quantity),
-    health: {
-      score: scoreFromNutriScore(p.nutriscore_grade, p.nova_group),
-      grade: p.nutriscore_grade ?? null,
-      brand: p.brands ?? null,
-      pros,
-      cons,
-      raisedInfo: buildRaisedInfo(p.labels_tags, p.origins),
-    },
+    quality: assessQuality(p),
   };
+}
+
+const SHELF_LIFE_DAYS: Record<Category, number> = {
+  produce: 7,
+  dairy: 10,
+  meat: 5,
+  frozen: 180,
+  pantry: 270,
+  snacks: 120,
+  drinks: 270,
+  spices: 365,
+  household: 365,
+  other: 30,
+};
+
+/** A reasonable default expiration estimate for a freshly-purchased item,
+ * shown pre-filled but always editable — we have no real expiration data
+ * from the barcode itself. */
+export function estimateExpirationDate(category: Category): string {
+  const d = new Date();
+  d.setDate(d.getDate() + SHELF_LIFE_DAYS[category]);
+  return d.toISOString().slice(0, 10);
 }
