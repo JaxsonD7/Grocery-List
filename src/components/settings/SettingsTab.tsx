@@ -113,23 +113,22 @@ export function SettingsTab() {
       <section className="rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/10 p-5 space-y-3">
         <h2 className="font-semibold text-red-900 dark:text-red-300">Data</h2>
         <p className="text-sm text-red-800/80 dark:text-red-300/70">
-          Reset all inventory, meals, shopping list, cart, and history back to the built-in sample data. This
-          can't be undone.
+          Permanently clear all inventory, meals, shopping list, cart, and history. This can't be undone.
         </p>
         <Button variant="danger" icon={<RotateCcw size={16} />} onClick={() => setConfirmingReset(true)}>
-          Reset Sample Data
+          Clear All Data
         </Button>
       </section>
 
       {confirmingReset && (
         <ConfirmDialog
-          title="Reset all data?"
-          message="This replaces your current pantry, meals, shopping list, cart, and history with fresh sample data. This can't be undone."
-          confirmLabel="Reset Data"
+          title="Clear all data?"
+          message="This permanently removes your pantry, meals, shopping list, cart, and history, and starts fresh from empty. This can't be undone."
+          confirmLabel="Clear Data"
           danger
           onCancel={() => setConfirmingReset(false)}
           onConfirm={() => {
-            dispatch({ type: 'RESET_SAMPLE_DATA' });
+            dispatch({ type: 'RESET_DATA' });
             setConfirmingReset(false);
           }}
         />

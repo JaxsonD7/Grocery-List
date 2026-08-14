@@ -9,7 +9,6 @@ import type {
   MealHistoryItem,
   ShoppingListItem,
 } from '../types';
-import { createSampleState } from '../data/sampleData';
 import { loadState, saveState } from '../lib/storage';
 import { mergeIntoShoppingList, type ShoppingListInput } from '../lib/shoppingList';
 import { mergePurchaseIntoInventory } from '../lib/inventory';
@@ -34,7 +33,7 @@ type Action =
   | { type: 'MOVE_CART_TO_LIST'; id: string }
   | { type: 'CHECKOUT_CART' }
   | { type: 'UPDATE_SETTINGS'; updates: Partial<AppSettings> }
-  | { type: 'RESET_SAMPLE_DATA' };
+  | { type: 'RESET_DATA' };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -278,8 +277,8 @@ function reducer(state: AppState, action: Action): AppState {
     case 'UPDATE_SETTINGS':
       return { ...state, settings: { ...state.settings, ...action.updates } };
 
-    case 'RESET_SAMPLE_DATA':
-      return createSampleState();
+    case 'RESET_DATA':
+      return createEmptyState();
 
     default:
       return state;
@@ -290,8 +289,27 @@ function roundQty(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+const DEFAULT_SETTINGS: AppSettings = {
+  defaultLowStockBehavior: 'recommend',
+  defaultUnit: 'count',
+  defaultCategory: 'pantry',
+  defaultLocation: 'pantry',
+  defaultLowStockThreshold: 2,
+};
+
+function createEmptyState(): AppState {
+  return {
+    inventory: [],
+    meals: [],
+    shoppingList: [],
+    cart: [],
+    mealHistory: [],
+    settings: { ...DEFAULT_SETTINGS },
+  };
+}
+
 function init(): AppState {
-  return loadState<AppState>() ?? createSampleState();
+  return loadState<AppState>() ?? createEmptyState();
 }
 
 interface AppContextValue {
