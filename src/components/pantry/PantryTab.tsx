@@ -12,7 +12,7 @@ import { inputClass, selectClass } from '../ui/FormField';
 import { getItemFlags } from '../../lib/status';
 
 const BarcodeScannerModal = lazy(() =>
-  import('./BarcodeScannerModal').then((m) => ({ default: m.BarcodeScannerModal })),
+  import('../scanner/BarcodeScannerModal').then((m) => ({ default: m.BarcodeScannerModal })),
 );
 
 type SortMode = 'name' | 'status';
@@ -141,7 +141,7 @@ export function PantryTab() {
 
       {scanning && (
         <Suspense fallback={null}>
-          <BarcodeScannerModal onClose={() => setScanning(false)} />
+          <BarcodeScannerModal context="pantry" onClose={() => setScanning(false)} />
         </Suspense>
       )}
 

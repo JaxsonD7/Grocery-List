@@ -9,6 +9,7 @@ import {
   Camera,
   CheckCircle2,
   Hash,
+  Info,
   Leaf,
   ListPlus,
   Loader2,
@@ -19,6 +20,7 @@ import {
   ScanLine,
   ShieldCheck,
   ShoppingBasket,
+  ShoppingCart,
   Tag,
   ThumbsDown,
   ThumbsUp,
@@ -44,6 +46,7 @@ import { estimateExpirationDate, lookupProductByBarcode, type ProductLookupResul
 import { useAppState } from '../../context/AppContext';
 
 type Phase = 'scan' | 'looking-up' | 'result' | 'details';
+export type ScanContext = 'pantry' | 'shopping';
 
 const rowSelectClass =
   'appearance-none bg-transparent border-0 pr-0 text-right text-sm font-medium text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 rounded-md cursor-pointer';
@@ -60,10 +63,11 @@ interface DetailsForm {
 }
 
 interface BarcodeScannerModalProps {
+  context: ScanContext;
   onClose: () => void;
 }
 
-export function BarcodeScannerModal({ onClose }: BarcodeScannerModalProps) {
+export function BarcodeScannerModal({ context, onClose }: BarcodeScannerModalProps) {
   const { state, dispatch } = useAppState();
   const [phase, setPhase] = useState<Phase>('scan');
   const [manualCode, setManualCode] = useState('');
@@ -75,7 +79,16 @@ export function BarcodeScannerModal({ onClose }: BarcodeScannerModalProps) {
   const [editingIdentity, setEditingIdentity] = useState(false);
   const [addedToPantry, setAddedToPantry] = useState(false);
   const [addedToList, setAddedToList] = useState(false);
+  const [addedToCart, setAddedToCart] = useState(false);
   const [form, setForm] = useState<DetailsForm | null>(null);
+
+  const existingInInventory = form
+    ? state.inventory.find(
+        (i) =>
+          (scannedCode && i.barcode === scannedCode) ||
+          i.name.trim().toLowerCase() === form.name.trim().toLowerCase(),
+      ) ?? null
+    : null;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
@@ -171,6 +184,7 @@ export function BarcodeScannerModal({ onClose }: BarcodeScannerModalProps) {
     setEditingIdentity(false);
     setAddedToPantry(false);
     setAddedToList(false);
+    setAddedToCart(false);
     setPhase('scan');
   }
 
@@ -180,11 +194,7 @@ export function BarcodeScannerModal({ onClose }: BarcodeScannerModalProps) {
 
   function addToPantry() {
     if (!form || !form.name.trim()) return;
-    const existing = state.inventory.find(
-      (i) =>
-        (scannedCode && i.barcode === scannedCode) ||
-        i.name.trim().toLowerCase() === form.name.trim().toLowerCase(),
-    );
+    const existing = existingInInventory;
     const now = new Date().toISOString();
     const notes = product ? buildQualityNote(product) : '';
 
@@ -237,6 +247,22 @@ export function BarcodeScannerModal({ onClose }: BarcodeScannerModalProps) {
       },
     });
     setAddedToList(true);
+  }
+
+  function addToCart() {
+    if (!form || !form.name.trim()) return;
+    dispatch({
+      type: 'ADD_CART_ITEM',
+      item: {
+        name: form.name.trim(),
+        quantity: form.quantity,
+        unit: form.unit,
+        category: form.category,
+        notes: '',
+        linkedInventoryItemId: null,
+      },
+    });
+    setAddedToCart(true);
   }
 
   return (
@@ -308,6 +334,7 @@ export function BarcodeScannerModal({ onClose }: BarcodeScannerModalProps) {
 
       {phase === 'details' && form && (
         <DetailsScreen
+          context={context}
           form={form}
           matched={matched}
           scannedCode={scannedCode}
@@ -315,10 +342,13 @@ export function BarcodeScannerModal({ onClose }: BarcodeScannerModalProps) {
           editingIdentity={editingIdentity}
           onToggleEditing={() => setEditingIdentity((v) => !v)}
           onChange={updateForm}
+          existingInInventory={existingInInventory}
           addedToPantry={addedToPantry}
           addedToList={addedToList}
+          addedToCart={addedToCart}
           onAddToPantry={addToPantry}
           onAddToShoppingList={addToShoppingList}
+          onAddToCart={addToCart}
           onScanAnother={scanAnother}
           onDone={onClose}
         />
@@ -481,6 +511,7 @@ function ResultScreen({
 }
 
 function DetailsScreen({
+  context,
   form,
   matched,
   scannedCode,
@@ -488,13 +519,17 @@ function DetailsScreen({
   editingIdentity,
   onToggleEditing,
   onChange,
+  existingInInventory,
   addedToPantry,
   addedToList,
+  addedToCart,
   onAddToPantry,
   onAddToShoppingList,
+  onAddToCart,
   onScanAnother,
   onDone,
 }: {
+  context: ScanContext;
   form: DetailsForm;
   matched: boolean;
   scannedCode: string | null;
@@ -502,10 +537,13 @@ function DetailsScreen({
   editingIdentity: boolean;
   onToggleEditing: () => void;
   onChange: (updates: Partial<DetailsForm>) => void;
+  existingInInventory: InventoryItem | null;
   addedToPantry: boolean;
   addedToList: boolean;
+  addedToCart: boolean;
   onAddToPantry: () => void;
   onAddToShoppingList: () => void;
+  onAddToCart: () => void;
   onScanAnother: () => void;
   onDone: () => void;
 }) {
@@ -519,6 +557,13 @@ function DetailsScreen({
         </p>
         <p className="text-sm text-neutral-500">Review and confirm the details below.</p>
       </div>
+
+      {context === 'shopping' && existingInInventory && (
+        <p className="flex items-center gap-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 px-3 py-2 text-sm text-blue-800 dark:text-blue-300">
+          <Info size={16} className="shrink-0" />
+          Already in pantry: {formatQty(existingInInventory.quantity)} {UNIT_LABELS[existingInInventory.unit]}
+        </p>
+      )}
 
       {!matched && (
         <p className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
@@ -663,21 +708,44 @@ function DetailsScreen({
           <CheckCircle2 size={16} /> Added to shopping list
         </div>
       )}
+      {addedToCart && (
+        <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300">
+          <CheckCircle2 size={16} /> Added to cart
+        </div>
+      )}
 
-      <Button
-        variant="primary"
-        className="w-full"
-        icon={<PackagePlus size={17} />}
-        disabled={!form.name.trim()}
-        onClick={onAddToPantry}
-      >
-        Add to Pantry
-      </Button>
+      {context === 'shopping' ? (
+        <Button
+          variant="primary"
+          className="w-full"
+          icon={<ShoppingCart size={17} />}
+          disabled={!form.name.trim()}
+          onClick={onAddToCart}
+        >
+          Add to Cart
+        </Button>
+      ) : (
+        <Button
+          variant="primary"
+          className="w-full"
+          icon={<PackagePlus size={17} />}
+          disabled={!form.name.trim()}
+          onClick={onAddToPantry}
+        >
+          Add to Pantry
+        </Button>
+      )}
 
       <div className="grid grid-cols-3 gap-2">
-        <Button size="sm" variant="secondary" icon={<ListPlus size={14} />} onClick={onAddToShoppingList} disabled={!form.name.trim()}>
-          Shopping List
-        </Button>
+        {context === 'shopping' ? (
+          <Button size="sm" variant="secondary" icon={<PackagePlus size={14} />} onClick={onAddToPantry} disabled={!form.name.trim()}>
+            Add to Pantry
+          </Button>
+        ) : (
+          <Button size="sm" variant="secondary" icon={<ListPlus size={14} />} onClick={onAddToShoppingList} disabled={!form.name.trim()}>
+            Shopping List
+          </Button>
+        )}
         {matched ? (
           <Button size="sm" variant="secondary" icon={<Pencil size={14} />} onClick={onToggleEditing}>
             {editingIdentity ? 'Done' : 'Edit'}
