@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'pantry-tracker:state:v1';
+const STORAGE_KEY = 'pantry-tracker:state:v2';
 
 export function loadState<T>(): T | null {
   try {
