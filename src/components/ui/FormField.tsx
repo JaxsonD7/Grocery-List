@@ -10,8 +10,10 @@ export function Field({ label, children, hint }: { label: string; children: Reac
   );
 }
 
+// text-base (16px), not text-sm: iOS Safari auto-zooms the page on focus for any
+// input/select with a font-size under 16px, which reads as the screen "jumping".
 const inputBase =
-  'w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-colors';
+  'w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-2 text-base text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-colors';
 
 export const inputClass = inputBase;
 export const selectClass = `${inputBase} appearance-none bg-no-repeat pr-8`;

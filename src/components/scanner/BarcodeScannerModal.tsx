@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BarcodeFormat, BrowserMultiFormatReader } from '@zxing/browser';
 import type { IScannerControls } from '@zxing/browser';
+import { DecodeHintType } from '@zxing/library';
 import {
   AlertTriangle,
   Barcode,
@@ -48,8 +49,26 @@ import { useAppState } from '../../context/AppContext';
 type Phase = 'scan' | 'looking-up' | 'result' | 'details';
 export type ScanContext = 'pantry' | 'shopping';
 
+// text-base (16px) avoids iOS Safari's auto-zoom-on-focus for small form fields.
 const rowSelectClass =
-  'appearance-none bg-transparent border-0 pr-0 text-right text-sm font-medium text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 rounded-md cursor-pointer';
+  'appearance-none bg-transparent border-0 pr-0 text-right text-base font-medium text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 rounded-md cursor-pointer';
+
+// Restrict decoding to the barcode symbologies actually used on grocery
+// packaging. Trying every supported format (QR, PDF417, Aztec, ...) on every
+// frame is the main reason handheld scanning feels slow.
+const SCAN_HINTS = new Map([
+  [
+    DecodeHintType.POSSIBLE_FORMATS,
+    [
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+    ],
+  ],
+]);
 
 interface DetailsForm {
   name: string;
@@ -96,13 +115,14 @@ export function BarcodeScannerModal({ context, onClose }: BarcodeScannerModalPro
   useEffect(() => {
     if (phase !== 'scan') return;
     let cancelled = false;
-    const reader = new BrowserMultiFormatReader();
+    const reader = new BrowserMultiFormatReader(SCAN_HINTS, { delayBetweenScanAttempts: 150 });
 
     reader
       .decodeFromVideoDevice(undefined, videoRef.current ?? undefined, (result, _err, controls) => {
         controlsRef.current = controls;
         if (cancelled || !result) return;
         controls.stop();
+        navigator.vibrate?.(80);
         handleCode(result.getText());
       })
       .catch((err: unknown) => {
@@ -273,8 +293,18 @@ export function BarcodeScannerModal({ context, onClose }: BarcodeScannerModalPro
     >
       {phase === 'scan' && (
         <div className="space-y-4">
-          <div className="overflow-hidden rounded-xl bg-black">
-            <video ref={videoRef} className="aspect-square w-full object-cover" muted playsInline />
+          <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-black">
+            <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
+            {!cameraError && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8">
+                <div className="relative h-2/5 w-full max-w-xs">
+                  <span className="absolute left-0 top-0 h-7 w-7 rounded-tl-lg border-l-4 border-t-4 border-emerald-400" />
+                  <span className="absolute right-0 top-0 h-7 w-7 rounded-tr-lg border-r-4 border-t-4 border-emerald-400" />
+                  <span className="absolute bottom-0 left-0 h-7 w-7 rounded-bl-lg border-b-4 border-l-4 border-emerald-400" />
+                  <span className="absolute bottom-0 right-0 h-7 w-7 rounded-br-lg border-b-4 border-r-4 border-emerald-400" />
+                </div>
+              </div>
+            )}
           </div>
           {cameraError ? (
             <p className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
@@ -283,7 +313,7 @@ export function BarcodeScannerModal({ context, onClose }: BarcodeScannerModalPro
             </p>
           ) : (
             <p className="flex items-center gap-2 text-sm text-neutral-500">
-              <Camera size={16} /> Point your camera at a barcode
+              <Camera size={16} /> Align the barcode within the frame
             </p>
           )}
 
