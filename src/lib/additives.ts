@@ -1,4 +1,4 @@
-export type AdditiveRisk = 'low' | 'moderate' | 'high';
+export type AdditiveRisk = 'low' | 'moderate' | 'high' | 'unrated';
 
 export interface AdditiveInfo {
   code: string; // e.g. "E211"
@@ -86,5 +86,5 @@ export function lookupAdditive(tag: string): AdditiveInfo {
   const code = match ? `E${match[1].toUpperCase()}` : raw.toUpperCase();
   const info = ADDITIVE_DB[code.toLowerCase()];
   if (info) return { code, ...info };
-  return { code, name: code, risk: 'moderate', note: 'Not individually rated — limited public data available' };
+  return { code, name: code, risk: 'unrated', note: "Not in our reference table — we don't have public data to rate it" };
 }

@@ -136,7 +136,10 @@ function tierFromScore(score: number): QualityTier {
   return 'Bad';
 }
 
-const ADDITIVE_PENALTY: Record<AdditiveInfo['risk'], number> = { high: 15, moderate: 7, low: 2 };
+// Unrated additives get no penalty — we simply don't have data to judge them,
+// which isn't the same as them being risky. Penalizing "unknown" the same as
+// "moderate risk" would make the score over-warn on additives we know nothing about.
+const ADDITIVE_PENALTY: Record<AdditiveInfo['risk'], number> = { high: 15, moderate: 7, low: 2, unrated: 0 };
 
 function assessQuality(product: OpenFoodFactsProduct, additives: AdditiveInfo[]): ProductQuality {
   const labels = product.labels_tags ?? [];

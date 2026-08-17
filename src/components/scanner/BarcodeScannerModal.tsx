@@ -559,17 +559,31 @@ function ResultScreen({
   );
 }
 
-const RISK_LABEL: Record<AdditiveInfo['risk'], string> = { high: 'High risk', moderate: 'Moderate', low: 'Low risk' };
-const RISK_TONE: Record<AdditiveInfo['risk'], 'danger' | 'warning' | 'success'> = {
+const RISK_LABEL: Record<AdditiveInfo['risk'], string> = {
+  high: 'High risk',
+  moderate: 'Moderate',
+  low: 'Low risk',
+  unrated: 'Not rated',
+};
+const RISK_TONE: Record<AdditiveInfo['risk'], 'danger' | 'warning' | 'success' | 'neutral'> = {
   high: 'danger',
   moderate: 'warning',
   low: 'success',
+  unrated: 'neutral',
 };
 
 function AdditivesCard({ additives }: { additives: AdditiveInfo[] }) {
   const [expanded, setExpanded] = useState(false);
   const highCount = additives.filter((a) => a.risk === 'high').length;
   const moderateCount = additives.filter((a) => a.risk === 'moderate').length;
+  const unratedCount = additives.filter((a) => a.risk === 'unrated').length;
+
+  let subtitle: string;
+  if (highCount > 0) subtitle = `${highCount} higher-risk`;
+  else if (moderateCount > 0) subtitle = `${moderateCount} moderate-risk`;
+  else if (unratedCount === additives.length) subtitle = 'Not individually rated';
+  else if (unratedCount > 0) subtitle = `Low-risk · ${unratedCount} not rated`;
+  else subtitle = 'All low-risk';
 
   return (
     <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
@@ -584,13 +598,7 @@ function AdditivesCard({ additives }: { additives: AdditiveInfo[] }) {
             <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
               {additives.length} additive{additives.length === 1 ? '' : 's'}
             </p>
-            <p className="text-xs text-neutral-500">
-              {highCount > 0
-                ? `${highCount} higher-risk`
-                : moderateCount > 0
-                  ? `${moderateCount} moderate-risk`
-                  : 'All low-risk'}
-            </p>
+            <p className="text-xs text-neutral-500">{subtitle}</p>
           </div>
         </div>
         {expanded ? (
@@ -600,21 +608,26 @@ function AdditivesCard({ additives }: { additives: AdditiveInfo[] }) {
         )}
       </button>
       {expanded && (
-        <ul className="mt-3 space-y-2.5 border-t border-neutral-100 dark:border-neutral-800 pt-3">
-          {additives.map((a) => (
-            <li key={a.code} className="flex items-start justify-between gap-2 text-sm">
-              <div className="min-w-0">
-                <p className="font-medium text-neutral-800 dark:text-neutral-200">
-                  {a.code} · {a.name}
-                </p>
-                <p className="text-xs text-neutral-500">{a.note}</p>
-              </div>
-              <Badge tone={RISK_TONE[a.risk]} className="shrink-0">
-                {RISK_LABEL[a.risk]}
-              </Badge>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="mt-3 space-y-2.5 border-t border-neutral-100 dark:border-neutral-800 pt-3">
+            {additives.map((a) => (
+              <li key={a.code} className="flex items-start justify-between gap-2 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium text-neutral-800 dark:text-neutral-200">
+                    {a.code} · {a.name}
+                  </p>
+                  <p className="text-xs text-neutral-500">{a.note}</p>
+                </div>
+                <Badge tone={RISK_TONE[a.risk]} className="shrink-0">
+                  {RISK_LABEL[a.risk]}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2.5 text-[11px] text-neutral-400">
+            Simplified reference ratings based on public food-safety discussions — not medical advice.
+          </p>
+        </>
       )}
     </div>
   );
