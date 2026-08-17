@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Firebase config (local dev only; production values live in GitHub secrets)
+.env
+.env.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

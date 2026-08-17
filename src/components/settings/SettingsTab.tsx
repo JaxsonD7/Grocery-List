@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { RotateCcw, Settings as SettingsIcon } from 'lucide-react';
+import { LogOut, RotateCcw, Settings as SettingsIcon, UserRound } from 'lucide-react';
 import { useAppState } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import {
   CATEGORIES,
   CATEGORY_LABELS,
@@ -21,6 +22,7 @@ export function SettingsTab() {
   const { state, dispatch } = useAppState();
   const { settings } = state;
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const { user, configured, signOut } = useAuth();
 
   function update<K extends keyof typeof settings>(key: K, value: (typeof settings)[K]) {
     dispatch({ type: 'UPDATE_SETTINGS', updates: { [key]: value } });
@@ -32,6 +34,27 @@ export function SettingsTab() {
         <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Settings</h1>
         <p className="text-sm text-neutral-500">Configure defaults for new items and low-stock handling</p>
       </div>
+
+      {configured && user && (
+        <section className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                <UserRound size={18} />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                  {user.email ?? 'Signed in'}
+                </p>
+                <p className="text-xs text-neutral-500">Shared with anyone signed into this account</p>
+              </div>
+            </div>
+            <Button variant="secondary" size="sm" icon={<LogOut size={14} />} onClick={() => signOut()}>
+              Sign Out
+            </Button>
+          </div>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5 space-y-4">
         <div className="flex items-center gap-2">

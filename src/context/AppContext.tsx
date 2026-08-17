@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
 import type {
   AppSettings,
@@ -10,6 +10,8 @@ import type {
   ShoppingListItem,
 } from '../types';
 import { loadState, saveState } from '../lib/storage';
+import { getDb, isFirebaseConfigured } from '../lib/firebase';
+import { useAuth } from './AuthContext';
 import { mergeIntoShoppingList, type ShoppingListInput } from '../lib/shoppingList';
 import { mergePurchaseIntoInventory } from '../lib/inventory';
 
@@ -317,25 +319,99 @@ function createEmptyState(): AppState {
   };
 }
 
-function init(): AppState {
-  return loadState<AppState>() ?? createEmptyState();
-}
-
 interface AppContextValue {
   state: AppState;
-  dispatch: React.Dispatch<Action>;
+  dispatch: (action: Action) => void;
+  /** True while the initial cloud state is still loading, so the UI can
+   * avoid flashing an empty pantry before the real data arrives. */
+  syncing: boolean;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+// Firestore itself is only pulled in (via the dynamic imports below) once
+// someone is actually signed in, so signed-out visitors never download it.
+async function writeCloudState(uid: string, data: AppState): Promise<void> {
+  const [{ doc, setDoc }, db] = await Promise.all([import('firebase/firestore'), getDb()]);
+  if (!db) return;
+  await setDoc(doc(db, 'households', uid), data);
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, init);
+  const { user } = useAuth();
+  const useCloud = isFirebaseConfigured && !!user;
 
+  const [state, setState] = useState<AppState>(() =>
+    useCloud ? createEmptyState() : (loadState<AppState>() ?? createEmptyState()),
+  );
+  const [syncing, setSyncing] = useState(useCloud);
+  const writeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestState = useRef(state);
+
+  // Cloud mode: subscribe to this account's document. The same account
+  // signed in on two devices shares one document, so changes made on either
+  // device sync to the other in real time (and while offline, Firestore's
+  // local cache keeps the last-synced data available and queues writes).
   useEffect(() => {
-    saveState(state);
-  }, [state]);
+    if (!useCloud || !user) return;
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    setSyncing(true);
 
-  const value = useMemo(() => ({ state, dispatch }), [state]);
+    void (async () => {
+      const [{ doc, onSnapshot, setDoc }, db] = await Promise.all([
+        import('firebase/firestore'),
+        getDb(),
+      ]);
+      if (cancelled || !db) return;
+      const ref = doc(db, 'households', user.uid);
+      unsubscribe = onSnapshot(
+        ref,
+        (snap: import('firebase/firestore').DocumentSnapshot) => {
+          if (snap.exists()) {
+            const data = snap.data() as AppState;
+            latestState.current = data;
+            setState(data);
+          } else {
+            const initial = createEmptyState();
+            latestState.current = initial;
+            setState(initial);
+            void setDoc(ref, initial);
+          }
+          setSyncing(false);
+        },
+        () => setSyncing(false),
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useCloud, user?.uid]);
+
+  // Local-only fallback when no Firebase project is configured.
+  useEffect(() => {
+    if (useCloud) return;
+    saveState(state);
+  }, [state, useCloud]);
+
+  function dispatch(action: Action) {
+    setState((prev) => {
+      const next = reducer(prev, action);
+      latestState.current = next;
+      if (useCloud && user) {
+        if (writeTimer.current) clearTimeout(writeTimer.current);
+        writeTimer.current = setTimeout(() => {
+          void writeCloudState(user.uid, latestState.current);
+        }, 400);
+      }
+      return next;
+    });
+  }
+
+  const value: AppContextValue = { state, dispatch, syncing };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

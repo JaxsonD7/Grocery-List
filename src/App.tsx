@@ -1,8 +1,11 @@
 import { lazy, Suspense, useState } from 'react';
 import { AppProvider, useAppState } from './context/AppContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { TabNav } from './components/layout/TabNav';
 import { PantryTab } from './components/pantry/PantryTab';
 import { Refrigerator } from 'lucide-react';
+
+const SignInScreen = lazy(() => import('./components/auth/SignInScreen').then((m) => ({ default: m.SignInScreen })));
 
 // Pantry loads eagerly since it's the first screen; the rest load on demand
 // so the initial bundle users download before seeing anything stays small.
@@ -23,7 +26,7 @@ const TAB_TITLES: Record<Tab, string> = {
 
 function AppShell() {
   const [tab, setTab] = useState<Tab>('pantry');
-  const { state } = useAppState();
+  const { state, syncing } = useAppState();
 
   const shoppingBadge = state.shoppingList.filter((i) => !i.checked && !i.inCart).length;
   const cartBadge = state.cart.length;
@@ -46,13 +49,19 @@ function AppShell() {
       </header>
 
       <main className="mx-auto w-full max-w-5xl grow px-4 pb-24 pt-4 md:pb-10">
-        {tab === 'pantry' && <PantryTab onNavigate={setTab} />}
-        <Suspense fallback={<TabLoading />}>
-          {tab === 'meals' && <MealsTab />}
-          {tab === 'shopping' && <ShoppingTab onNavigate={setTab} />}
-          {tab === 'cart' && <CartTab />}
-          {tab === 'settings' && <SettingsTab />}
-        </Suspense>
+        {syncing ? (
+          <TabLoading />
+        ) : (
+          <>
+            {tab === 'pantry' && <PantryTab onNavigate={setTab} />}
+            <Suspense fallback={<TabLoading />}>
+              {tab === 'meals' && <MealsTab />}
+              {tab === 'shopping' && <ShoppingTab onNavigate={setTab} />}
+              {tab === 'cart' && <CartTab />}
+              {tab === 'settings' && <SettingsTab />}
+            </Suspense>
+          </>
+        )}
       </main>
     </div>
   );
@@ -66,10 +75,29 @@ function TabLoading() {
   );
 }
 
-export default function App() {
+function AuthGate() {
+  const { user, loading, configured } = useAuth();
+
+  if (configured && loading) return <TabLoading />;
+  if (configured && !user) {
+    return (
+      <Suspense fallback={<TabLoading />}>
+        <SignInScreen />
+      </Suspense>
+    );
+  }
+
   return (
     <AppProvider>
       <AppShell />
     </AppProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
   );
 }
