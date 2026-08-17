@@ -34,9 +34,9 @@ export function TabNav({ active, onChange, badges }: TabNavProps) {
 
       {/* Mobile: fixed bottom nav, portaled to <body> so it anchors to the real
           viewport rather than any ancestor that establishes a containing block
-          (e.g. the header's backdrop-blur). */}
+          (e.g. a filter/transform/backdrop-filter on the header). */}
       {createPortal(
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 flex items-stretch border-t border-neutral-200 dark:border-neutral-800 bg-white/95 dark:bg-neutral-900/95 backdrop-blur pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 flex items-stretch border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
           {TABS.map((tab) => (
             <TabButton key={tab.id} tab={tab} active={active === tab.id} badge={badges[tab.id]} onClick={() => onChange(tab.id)} />
           ))}

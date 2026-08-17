@@ -45,6 +45,7 @@ import {
 } from '../../types';
 import { estimateExpirationDate, lookupProductByBarcode, type ProductLookupResult } from '../../lib/barcode';
 import { useAppState } from '../../context/AppContext';
+import type { Tab } from '../../App';
 
 type Phase = 'scan' | 'looking-up' | 'result' | 'details';
 export type ScanContext = 'pantry' | 'shopping';
@@ -84,9 +85,10 @@ interface DetailsForm {
 interface BarcodeScannerModalProps {
   context: ScanContext;
   onClose: () => void;
+  onNavigate: (tab: Tab) => void;
 }
 
-export function BarcodeScannerModal({ context, onClose }: BarcodeScannerModalProps) {
+export function BarcodeScannerModal({ context, onClose, onNavigate }: BarcodeScannerModalProps) {
   const { state, dispatch } = useAppState();
   const [phase, setPhase] = useState<Phase>('scan');
   const [manualCode, setManualCode] = useState('');
@@ -381,6 +383,10 @@ export function BarcodeScannerModal({ context, onClose }: BarcodeScannerModalPro
           onAddToCart={addToCart}
           onScanAnother={scanAnother}
           onDone={onClose}
+          onGoToTab={(t) => {
+            onNavigate(t);
+            onClose();
+          }}
         />
       )}
     </Modal>
@@ -558,6 +564,7 @@ function DetailsScreen({
   onAddToCart,
   onScanAnother,
   onDone,
+  onGoToTab,
 }: {
   context: ScanContext;
   form: DetailsForm;
@@ -576,6 +583,7 @@ function DetailsScreen({
   onAddToCart: () => void;
   onScanAnother: () => void;
   onDone: () => void;
+  onGoToTab: (tab: Tab) => void;
 }) {
   const step = ['count', 'dozen', 'package', 'bottle', 'can', 'box', 'bag'].includes(form.unit) ? 1 : 0.5;
 
@@ -729,19 +737,13 @@ function DetailsScreen({
       </div>
 
       {addedToPantry && (
-        <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300">
-          <CheckCircle2 size={16} /> Added to pantry
-        </div>
+        <SuccessBanner label="Added to pantry" actionLabel="View Pantry" onAction={() => onGoToTab('pantry')} />
       )}
       {addedToList && (
-        <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300">
-          <CheckCircle2 size={16} /> Added to shopping list
-        </div>
+        <SuccessBanner label="Added to shopping list" actionLabel="View List" onAction={() => onGoToTab('shopping')} />
       )}
       {addedToCart && (
-        <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300">
-          <CheckCircle2 size={16} /> Added to cart
-        </div>
+        <SuccessBanner label="Added to cart" actionLabel="View Cart" onAction={() => onGoToTab('cart')} />
       )}
 
       {context === 'shopping' ? (
@@ -789,6 +791,27 @@ function DetailsScreen({
           Scan Another
         </Button>
       </div>
+    </div>
+  );
+}
+
+function SuccessBanner({
+  label,
+  actionLabel,
+  onAction,
+}: {
+  label: string;
+  actionLabel: string;
+  onAction: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm font-medium text-emerald-800 dark:text-emerald-300">
+      <span className="flex items-center gap-2">
+        <CheckCircle2 size={16} /> {label}
+      </span>
+      <button type="button" onClick={onAction} className="font-semibold underline underline-offset-2">
+        {actionLabel}
+      </button>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo, useState } from 'react';
 import { Barcode, ListChecks, Plus } from 'lucide-react';
 import { useAppState } from '../../context/AppContext';
 import type { ShoppingListItem } from '../../types';
+import type { Tab } from '../../App';
 import { ShoppingItemRow } from './ShoppingItemRow';
 import { ShoppingItemFormModal } from './ShoppingItemFormModal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -12,7 +13,7 @@ const BarcodeScannerModal = lazy(() =>
   import('../scanner/BarcodeScannerModal').then((m) => ({ default: m.BarcodeScannerModal })),
 );
 
-export function ShoppingTab({ onGoToCart }: { onGoToCart: () => void }) {
+export function ShoppingTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const { state, dispatch } = useAppState();
   const [editingItem, setEditingItem] = useState<ShoppingListItem | null | undefined>(undefined);
   const [deletingItem, setDeletingItem] = useState<ShoppingListItem | null>(null);
@@ -34,7 +35,7 @@ export function ShoppingTab({ onGoToCart }: { onGoToCart: () => void }) {
         </div>
         <div className="flex flex-wrap gap-2">
           {cartCount > 0 && (
-            <Button variant="secondary" onClick={onGoToCart}>
+            <Button variant="secondary" onClick={() => onNavigate('cart')}>
               View Cart ({cartCount})
             </Button>
           )}
@@ -97,7 +98,7 @@ export function ShoppingTab({ onGoToCart }: { onGoToCart: () => void }) {
 
       {scanning && (
         <Suspense fallback={null}>
-          <BarcodeScannerModal context="shopping" onClose={() => setScanning(false)} />
+          <BarcodeScannerModal context="shopping" onClose={() => setScanning(false)} onNavigate={onNavigate} />
         </Suspense>
       )}
 

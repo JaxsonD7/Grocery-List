@@ -25,3 +25,21 @@ export function clearState(): void {
     // ignore
   }
 }
+
+const ONBOARDING_KEY = 'pantry-tracker:onboarding-dismissed:v1';
+
+export function hasSeenOnboarding(): boolean {
+  try {
+    return localStorage.getItem(ONBOARDING_KEY) === '1';
+  } catch {
+    return true;
+  }
+}
+
+export function markOnboardingSeen(): void {
+  try {
+    localStorage.setItem(ONBOARDING_KEY, '1');
+  } catch {
+    // ignore
+  }
+}

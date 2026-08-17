@@ -3,8 +3,10 @@ import { Barcode, Plus, Refrigerator, Search } from 'lucide-react';
 import { useAppState } from '../../context/AppContext';
 import type { Category, InventoryItem, Location } from '../../types';
 import { CATEGORIES, CATEGORY_LABELS, LOCATIONS, LOCATION_LABELS } from '../../types';
+import type { Tab } from '../../App';
 import { ItemCard } from './ItemCard';
 import { ItemFormModal } from './ItemFormModal';
+import { OnboardingHint } from './OnboardingHint';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { EmptyState } from '../ui/EmptyState';
 import { Button } from '../ui/Buttons';
@@ -17,7 +19,7 @@ const BarcodeScannerModal = lazy(() =>
 
 type SortMode = 'name' | 'status';
 
-export function PantryTab() {
+export function PantryTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const { state, dispatch } = useAppState();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<Category | 'all'>('all');
@@ -45,6 +47,8 @@ export function PantryTab() {
 
   return (
     <div className="space-y-4">
+      <OnboardingHint />
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Pantry &amp; Fridge</h1>
@@ -141,7 +145,7 @@ export function PantryTab() {
 
       {scanning && (
         <Suspense fallback={null}>
-          <BarcodeScannerModal context="pantry" onClose={() => setScanning(false)} />
+          <BarcodeScannerModal context="pantry" onClose={() => setScanning(false)} onNavigate={onNavigate} />
         </Suspense>
       )}
 
