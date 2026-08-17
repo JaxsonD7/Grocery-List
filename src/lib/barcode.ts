@@ -1,6 +1,7 @@
 import type { Category, Location, Unit } from '../types';
+import { lookupAdditive, type AdditiveInfo } from './additives';
 
-export type QualityTier = 'Excellent' | 'Good' | 'Fair' | 'Unknown';
+export type QualityTier = 'Excellent' | 'Good' | 'Poor' | 'Bad';
 
 export interface ProductQuality {
   score: number; // 0-100, higher = better sourced / less processed
@@ -8,6 +9,17 @@ export interface ProductQuality {
   pros: string[];
   cons: string[];
   raisedInfo: string | null; // sourcing/farming description, e.g. "Grass-fed, Pasture-raised"
+}
+
+export interface NutritionFacts {
+  calories: number | null; // kcal per 100g
+  protein: number | null; // g per 100g
+  carbs: number | null; // g per 100g
+  sugar: number | null; // g per 100g
+  fat: number | null; // g per 100g
+  saturatedFat: number | null; // g per 100g
+  fiber: number | null; // g per 100g
+  sodium: number | null; // mg per 100g
 }
 
 export interface ProductLookupResult {
@@ -20,6 +32,12 @@ export interface ProductLookupResult {
   suggestedLocation: Location;
   suggestedUnit: Unit;
   quality: ProductQuality;
+  additives: AdditiveInfo[];
+  nutrition: NutritionFacts | null;
+}
+
+interface OpenFoodFactsNutriments {
+  [key: string]: number | undefined;
 }
 
 interface OpenFoodFactsProduct {
@@ -36,6 +54,7 @@ interface OpenFoodFactsProduct {
   image_front_small_url?: string;
   image_small_url?: string;
   additives_tags?: string[];
+  nutriments?: OpenFoodFactsNutriments;
 }
 
 interface OpenFoodFactsResponse {
@@ -110,18 +129,16 @@ function guessUnit(quantity: string | undefined): Unit {
   return 'count';
 }
 
-const ADDITIVE_KEYWORDS = ['artificial flavor', 'artificial color', 'high fructose corn syrup', 'preservative'];
-
 function tierFromScore(score: number): QualityTier {
   if (score >= 75) return 'Excellent';
-  if (score >= 55) return 'Good';
-  if (score >= 35) return 'Fair';
-  return 'Unknown';
+  if (score >= 50) return 'Good';
+  if (score >= 25) return 'Poor';
+  return 'Bad';
 }
 
-function assessQuality(
-  product: OpenFoodFactsProduct,
-): ProductQuality {
+const ADDITIVE_PENALTY: Record<AdditiveInfo['risk'], number> = { high: 15, moderate: 7, low: 2 };
+
+function assessQuality(product: OpenFoodFactsProduct, additives: AdditiveInfo[]): ProductQuality {
   const labels = product.labels_tags ?? [];
   const matched = labels
     .map((tag) => RAISED_LABEL_MAP[tag])
@@ -145,17 +162,17 @@ function assessQuality(
     cons.push('Ultra-processed (NOVA group 4) — heavily altered from whole ingredients');
   }
 
-  const additiveCount = product.additives_tags?.length ?? 0;
-  if (additiveCount >= 4) {
-    score -= 10;
-    cons.push(`Contains ${additiveCount} food additives`);
-  }
-
-  const ingredientsLower = (product.ingredients_text ?? '').toLowerCase();
-  const flaggedIngredients = ADDITIVE_KEYWORDS.filter((kw) => ingredientsLower.includes(kw));
-  if (flaggedIngredients.length > 0) {
-    score -= 8 * flaggedIngredients.length;
-    cons.push(`Ingredients list includes ${flaggedIngredients.join(', ')}`);
+  const highRisk = additives.filter((a) => a.risk === 'high');
+  const moderateRisk = additives.filter((a) => a.risk === 'moderate');
+  const additivePenalty = additives.reduce((sum, a) => sum + ADDITIVE_PENALTY[a.risk], 0);
+  if (additivePenalty > 0) {
+    score -= Math.min(40, additivePenalty);
+    if (highRisk.length > 0) {
+      cons.push(`${highRisk.length} higher-risk additive${highRisk.length === 1 ? '' : 's'}: ${highRisk.map((a) => a.name).join(', ')}`);
+    }
+    if (moderateRisk.length > 0) {
+      cons.push(`${moderateRisk.length} moderate-risk additive${moderateRisk.length === 1 ? '' : 's'}: ${moderateRisk.map((a) => a.name).join(', ')}`);
+    }
   }
 
   if (pros.length === 0) {
@@ -180,12 +197,32 @@ function assessQuality(
   };
 }
 
-/** Looks up a scanned barcode against the Open Food Facts public database and
- * assesses ingredient/sourcing quality — how the food was raised or grown
- * (organic, grass-fed, pasture-raised, wild-caught, processing level, additive
- * count) — rather than a nutrition-facts score. Returns null when not found. */
+function extractNutrition(n: OpenFoodFactsNutriments | undefined): NutritionFacts | null {
+  if (!n) return null;
+  const sodiumG = n['sodium_100g'];
+  const facts: NutritionFacts = {
+    calories: n['energy-kcal_100g'] ?? null,
+    protein: n['proteins_100g'] ?? null,
+    carbs: n['carbohydrates_100g'] ?? null,
+    sugar: n['sugars_100g'] ?? null,
+    fat: n['fat_100g'] ?? null,
+    saturatedFat: n['saturated-fat_100g'] ?? null,
+    fiber: n['fiber_100g'] ?? null,
+    sodium: sodiumG !== undefined ? Math.round(sodiumG * 1000) : null,
+  };
+  const hasAnyValue = Object.values(facts).some((v) => v !== null);
+  return hasAnyValue ? facts : null;
+}
+
+/** Looks up a scanned barcode against the Open Food Facts public database.
+ * Assesses ingredient/sourcing quality — how the food was raised or grown
+ * (organic, grass-fed, pasture-raised, wild-caught, processing level, and
+ * individually risk-rated additives) — rather than a nutrition-facts score.
+ * Nutrition facts are still returned separately as reference info, Lose
+ * It-style, but don't factor into the quality score. Returns null when the
+ * barcode isn't found. */
 export async function lookupProductByBarcode(barcode: string): Promise<ProductLookupResult | null> {
-  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,generic_name,brands,nova_group,ingredients_text,labels_tags,origins,origins_tags,categories_tags,quantity,image_front_small_url,image_small_url,additives_tags`;
+  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,generic_name,brands,nova_group,ingredients_text,labels_tags,origins,origins_tags,categories_tags,quantity,image_front_small_url,image_small_url,additives_tags,nutriments`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Lookup failed with status ${res.status}`);
@@ -197,6 +234,7 @@ export async function lookupProductByBarcode(barcode: string): Promise<ProductLo
   if (!name) return null;
 
   const category = guessCategory(p.categories_tags);
+  const additives = (p.additives_tags ?? []).map(lookupAdditive);
 
   return {
     barcode,
@@ -207,7 +245,9 @@ export async function lookupProductByBarcode(barcode: string): Promise<ProductLo
     suggestedCategory: category,
     suggestedLocation: LOCATION_BY_CATEGORY[category],
     suggestedUnit: guessUnit(p.quantity),
-    quality: assessQuality(p),
+    quality: assessQuality(p, additives),
+    additives,
+    nutrition: extractNutrition(p.nutriments),
   };
 }
 

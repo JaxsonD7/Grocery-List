@@ -9,6 +9,10 @@ import {
   CalendarDays,
   Camera,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Flame,
+  FlaskConical,
   Hash,
   Info,
   Leaf,
@@ -43,7 +47,13 @@ import {
   type Location,
   type Unit,
 } from '../../types';
-import { estimateExpirationDate, lookupProductByBarcode, type ProductLookupResult } from '../../lib/barcode';
+import {
+  estimateExpirationDate,
+  lookupProductByBarcode,
+  type NutritionFacts,
+  type ProductLookupResult,
+} from '../../lib/barcode';
+import type { AdditiveInfo } from '../../lib/additives';
 import { useAppState } from '../../context/AppContext';
 import type { Tab } from '../../App';
 
@@ -496,6 +506,9 @@ function ResultScreen({
         )}
       </div>
 
+      {product.additives.length > 0 && <AdditivesCard additives={product.additives} />}
+      {product.nutrition && <NutritionCard nutrition={product.nutrition} />}
+
       <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -542,6 +555,121 @@ function ResultScreen({
           Continue
         </Button>
       </div>
+    </div>
+  );
+}
+
+const RISK_LABEL: Record<AdditiveInfo['risk'], string> = { high: 'High risk', moderate: 'Moderate', low: 'Low risk' };
+const RISK_TONE: Record<AdditiveInfo['risk'], 'danger' | 'warning' | 'success'> = {
+  high: 'danger',
+  moderate: 'warning',
+  low: 'success',
+};
+
+function AdditivesCard({ additives }: { additives: AdditiveInfo[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const highCount = additives.filter((a) => a.risk === 'high').length;
+  const moderateCount = additives.filter((a) => a.risk === 'moderate').length;
+
+  return (
+    <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <div className="flex items-center gap-2.5">
+          <FlaskConical size={18} className="text-neutral-500" />
+          <div>
+            <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+              {additives.length} additive{additives.length === 1 ? '' : 's'}
+            </p>
+            <p className="text-xs text-neutral-500">
+              {highCount > 0
+                ? `${highCount} higher-risk`
+                : moderateCount > 0
+                  ? `${moderateCount} moderate-risk`
+                  : 'All low-risk'}
+            </p>
+          </div>
+        </div>
+        {expanded ? (
+          <ChevronUp size={16} className="shrink-0 text-neutral-400" />
+        ) : (
+          <ChevronDown size={16} className="shrink-0 text-neutral-400" />
+        )}
+      </button>
+      {expanded && (
+        <ul className="mt-3 space-y-2.5 border-t border-neutral-100 dark:border-neutral-800 pt-3">
+          {additives.map((a) => (
+            <li key={a.code} className="flex items-start justify-between gap-2 text-sm">
+              <div className="min-w-0">
+                <p className="font-medium text-neutral-800 dark:text-neutral-200">
+                  {a.code} · {a.name}
+                </p>
+                <p className="text-xs text-neutral-500">{a.note}</p>
+              </div>
+              <Badge tone={RISK_TONE[a.risk]} className="shrink-0">
+                {RISK_LABEL[a.risk]}
+              </Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function NutritionCard({ nutrition }: { nutrition: NutritionFacts }) {
+  const [expanded, setExpanded] = useState(false);
+  const rows: [string, string][] = [
+    ['Calories', nutrition.calories !== null ? `${Math.round(nutrition.calories)} kcal` : '—'],
+    ['Protein', nutrition.protein !== null ? `${nutrition.protein.toFixed(1)} g` : '—'],
+    ['Carbs', nutrition.carbs !== null ? `${nutrition.carbs.toFixed(1)} g` : '—'],
+    ['Sugar', nutrition.sugar !== null ? `${nutrition.sugar.toFixed(1)} g` : '—'],
+    ['Fat', nutrition.fat !== null ? `${nutrition.fat.toFixed(1)} g` : '—'],
+    ['Saturated Fat', nutrition.saturatedFat !== null ? `${nutrition.saturatedFat.toFixed(1)} g` : '—'],
+    ['Fiber', nutrition.fiber !== null ? `${nutrition.fiber.toFixed(1)} g` : '—'],
+    ['Sodium', nutrition.sodium !== null ? `${nutrition.sodium} mg` : '—'],
+  ];
+
+  return (
+    <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <div className="flex items-center gap-2.5">
+          <Flame size={18} className="text-neutral-500" />
+          <div>
+            <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Nutrition Facts</p>
+            <p className="text-xs text-neutral-500">
+              {nutrition.calories !== null ? `${Math.round(nutrition.calories)} kcal` : '—'} per 100g
+            </p>
+          </div>
+        </div>
+        {expanded ? (
+          <ChevronUp size={16} className="shrink-0 text-neutral-400" />
+        ) : (
+          <ChevronDown size={16} className="shrink-0 text-neutral-400" />
+        )}
+      </button>
+      {expanded && (
+        <>
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-neutral-100 dark:border-neutral-800 pt-3 text-sm">
+            {rows.map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between gap-2">
+                <dt className="text-neutral-500">{label}</dt>
+                <dd className="font-medium tabular-nums text-neutral-800 dark:text-neutral-200">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-2.5 text-[11px] text-neutral-400">
+            Per 100g · reference only, doesn't affect the sourcing score
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -829,7 +957,7 @@ function DetailRow({ icon, label, children }: { icon: React.ReactNode; label: st
 }
 
 function QualityRing({ score }: { score: number }) {
-  const color = score >= 75 ? '#059669' : score >= 55 ? '#65a30d' : score >= 35 ? '#d97706' : '#78716c';
+  const color = score >= 75 ? '#059669' : score >= 50 ? '#84cc16' : score >= 25 ? '#d97706' : '#dc2626';
   const circumference = 2 * Math.PI * 26;
   const offset = circumference * (1 - score / 100);
 
