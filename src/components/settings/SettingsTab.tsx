@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LogOut, RotateCcw, Settings as SettingsIcon, UserRound } from 'lucide-react';
+import { FileDown, LogOut, RotateCcw, Settings as SettingsIcon, UserRound } from 'lucide-react';
 import { useAppState } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -22,10 +22,21 @@ export function SettingsTab() {
   const { state, dispatch } = useAppState();
   const { settings } = state;
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [exporting, setExporting] = useState<'pantry' | 'fridge' | 'all' | null>(null);
   const { user, configured, signOut } = useAuth();
 
   function update<K extends keyof typeof settings>(key: K, value: (typeof settings)[K]) {
     dispatch({ type: 'UPDATE_SETTINGS', updates: { [key]: value } });
+  }
+
+  async function handleExport(scope: 'pantry' | 'fridge' | 'all') {
+    setExporting(scope);
+    try {
+      const { exportInventoryToPdf } = await import('../../lib/exportPdf');
+      exportInventoryToPdf(state.inventory, scope);
+    } finally {
+      setExporting(null);
+    }
   }
 
   return (
@@ -130,6 +141,25 @@ export function SettingsTab() {
               ))}
             </select>
           </Field>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <FileDown size={17} className="text-emerald-600" />
+          <h2 className="font-semibold text-neutral-900 dark:text-neutral-100">Export</h2>
+        </div>
+        <p className="text-sm text-neutral-500">Download your inventory as a PDF.</p>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" disabled={exporting !== null} onClick={() => handleExport('pantry')}>
+            {exporting === 'pantry' ? 'Exporting…' : 'Pantry'}
+          </Button>
+          <Button variant="secondary" size="sm" disabled={exporting !== null} onClick={() => handleExport('fridge')}>
+            {exporting === 'fridge' ? 'Exporting…' : 'Fridge'}
+          </Button>
+          <Button variant="secondary" size="sm" disabled={exporting !== null} onClick={() => handleExport('all')}>
+            {exporting === 'all' ? 'Exporting…' : 'Everything'}
+          </Button>
         </div>
       </section>
 

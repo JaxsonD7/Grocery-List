@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { Barcode, ListChecks, Plus } from 'lucide-react';
+import { Barcode, ListChecks, Plus, Store } from 'lucide-react';
 import { useAppState } from '../../context/AppContext';
 import type { ShoppingListItem } from '../../types';
 import type { Tab } from '../../App';
@@ -13,6 +13,8 @@ const BarcodeScannerModal = lazy(() =>
   import('../scanner/BarcodeScannerModal').then((m) => ({ default: m.BarcodeScannerModal })),
 );
 
+const NO_STORE = 'No store set';
+
 export function ShoppingTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const { state, dispatch } = useAppState();
   const [editingItem, setEditingItem] = useState<ShoppingListItem | null | undefined>(undefined);
@@ -23,6 +25,18 @@ export function ShoppingTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) 
   const unchecked = visible.filter((i) => !i.checked);
   const checked = visible.filter((i) => i.checked);
   const cartCount = state.cart.length;
+
+  // Only worth grouping once someone's actually using the store field —
+  // otherwise everything would land in one "No store set" bucket and just
+  // add a redundant header above the same flat list.
+  const groupedByStore = useMemo(() => {
+    const groups = new Map<string, ShoppingListItem[]>();
+    for (const item of unchecked) {
+      const key = item.store || NO_STORE;
+      groups.set(key, [...(groups.get(key) ?? []), item]);
+    }
+    return groups.size > 1 ? groups : null;
+  }, [unchecked]);
 
   return (
     <div className="space-y-4">
@@ -62,15 +76,37 @@ export function ShoppingTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) 
       ) : (
         <div className="space-y-4">
           {unchecked.length > 0 && (
-            <div className="space-y-2">
-              {unchecked.map((item) => (
-                <ShoppingItemRow
-                  key={item.id}
-                  item={item}
-                  onEdit={() => setEditingItem(item)}
-                  onDelete={() => setDeletingItem(item)}
-                />
-              ))}
+            <div className="space-y-4">
+              {groupedByStore
+                ? Array.from(groupedByStore.entries()).map(([store, items]) => (
+                    <div key={store}>
+                      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                        <Store size={13} /> {store} · {items.length}
+                      </p>
+                      <div className="space-y-2">
+                        {items.map((item) => (
+                          <ShoppingItemRow
+                            key={item.id}
+                            item={item}
+                            onEdit={() => setEditingItem(item)}
+                            onDelete={() => setDeletingItem(item)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                : (
+                    <div className="space-y-2">
+                      {unchecked.map((item) => (
+                        <ShoppingItemRow
+                          key={item.id}
+                          item={item}
+                          onEdit={() => setEditingItem(item)}
+                          onDelete={() => setDeletingItem(item)}
+                        />
+                      ))}
+                    </div>
+                  )}
             </div>
           )}
 

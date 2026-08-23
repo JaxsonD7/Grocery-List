@@ -48,7 +48,7 @@ function AppShell() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl grow px-4 pb-24 pt-4 md:pb-10">
+      <main className="mx-auto w-full max-w-5xl grow px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4 md:pb-10">
         {syncing ? (
           <TabLoading />
         ) : (

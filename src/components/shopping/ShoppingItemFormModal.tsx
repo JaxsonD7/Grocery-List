@@ -4,6 +4,7 @@ import { Button } from '../ui/Buttons';
 import { Field, inputClass, selectClass } from '../ui/FormField';
 import { CATEGORIES, CATEGORY_LABELS, UNITS, UNIT_LABELS, type Category, type ShoppingListItem, type Unit } from '../../types';
 import { useAppState } from '../../context/AppContext';
+import { knownStores } from '../../lib/stores';
 
 interface ShoppingItemFormModalProps {
   item?: ShoppingListItem;
@@ -18,6 +19,7 @@ export function ShoppingItemFormModal({ item, onClose }: ShoppingItemFormModalPr
   const [quantity, setQuantity] = useState(item?.quantity ?? 1);
   const [unit, setUnit] = useState<Unit>(item?.unit ?? state.settings.defaultUnit);
   const [category, setCategory] = useState<Category>(item?.category ?? state.settings.defaultCategory);
+  const [store, setStore] = useState(item?.store ?? '');
   const [notes, setNotes] = useState(item?.notes ?? '');
   const [error, setError] = useState('');
 
@@ -27,16 +29,26 @@ export function ShoppingItemFormModal({ item, onClose }: ShoppingItemFormModalPr
       setError('Item name is required.');
       return;
     }
+    const store_ = store.trim() || null;
     if (isEdit && item) {
       dispatch({
         type: 'UPDATE_SHOPPING_ITEM',
         id: item.id,
-        updates: { name: name.trim(), quantity, unit, category, notes: notes.trim() },
+        updates: { name: name.trim(), quantity, unit, category, notes: notes.trim(), store: store_ },
       });
     } else {
       dispatch({
         type: 'ADD_SHOPPING_ITEM',
-        item: { name: name.trim(), quantity, unit, category, notes: notes.trim(), source: 'manual', linkedInventoryItemId: null },
+        item: {
+          name: name.trim(),
+          quantity,
+          unit,
+          category,
+          notes: notes.trim(),
+          source: 'manual',
+          linkedInventoryItemId: null,
+          store: store_,
+        },
       });
     }
     onClose();
@@ -84,15 +96,31 @@ export function ShoppingItemFormModal({ item, onClose }: ShoppingItemFormModalPr
           </Field>
         </div>
 
-        <Field label="Category">
-          <select className={selectClass} value={category} onChange={(e) => setCategory(e.target.value as Category)}>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {CATEGORY_LABELS[c]}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Category">
+            <select className={selectClass} value={category} onChange={(e) => setCategory(e.target.value as Category)}>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {CATEGORY_LABELS[c]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Store (optional)">
+            <input
+              className={inputClass}
+              list="shopping-known-stores"
+              value={store}
+              onChange={(e) => setStore(e.target.value)}
+              placeholder="e.g. Costco"
+            />
+            <datalist id="shopping-known-stores">
+              {knownStores(state).map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </Field>
+        </div>
 
         <Field label="Notes (optional)">
           <textarea className={inputClass} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />

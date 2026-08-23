@@ -37,20 +37,46 @@ type Action =
   | { type: 'UPDATE_SETTINGS'; updates: Partial<AppSettings> }
   | { type: 'RESET_DATA' };
 
+// Running out completely is an unambiguous signal, so it always queues a
+// restock regardless of the item's configurable lowStockBehavior (which only
+// governs the softer "at or below threshold" case).
+function ranOutOfStock(before: InventoryItem, after: InventoryItem): boolean {
+  return before.quantity > 0 && after.quantity <= 0;
+}
+
+function restockRequest(item: InventoryItem): ShoppingListInput {
+  // Percent-tracked items store 0-100 in `quantity`/`lowStockThreshold`, not a
+  // real-world count, so the arithmetic below doesn't apply — just ask for
+  // one more of whatever container unit the item restocks as.
+  const quantity = item.trackByPercent
+    ? 1
+    : Math.max(1, item.lowStockThreshold - item.quantity + 1);
+  return {
+    name: item.name,
+    quantity,
+    unit: item.unit,
+    category: item.category,
+    source: 'auto',
+    linkedInventoryItemId: item.id,
+    store: item.store ?? null,
+  };
+}
+
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'ADD_ITEM':
       return { ...state, inventory: [...state.inventory, action.item] };
 
-    case 'UPDATE_ITEM':
-      return {
-        ...state,
-        inventory: state.inventory.map((item) =>
-          item.id === action.id
-            ? { ...item, ...action.updates, updatedAt: new Date().toISOString() }
-            : item,
-        ),
-      };
+    case 'UPDATE_ITEM': {
+      const target = state.inventory.find((i) => i.id === action.id);
+      if (!target) return state;
+      const updated: InventoryItem = { ...target, ...action.updates, updatedAt: new Date().toISOString() };
+      const inventory = state.inventory.map((item) => (item.id === action.id ? updated : item));
+      const shoppingList = ranOutOfStock(target, updated)
+        ? mergeIntoShoppingList(state.shoppingList, restockRequest(updated))
+        : state.shoppingList;
+      return { ...state, inventory, shoppingList };
+    }
 
     case 'DELETE_ITEM':
       return {
@@ -58,19 +84,20 @@ function reducer(state: AppState, action: Action): AppState {
         inventory: state.inventory.filter((item) => item.id !== action.id),
       };
 
-    case 'ADJUST_QUANTITY':
-      return {
-        ...state,
-        inventory: state.inventory.map((item) =>
-          item.id === action.id
-            ? {
-                ...item,
-                quantity: Math.max(0, roundQty(item.quantity + action.delta)),
-                updatedAt: new Date().toISOString(),
-              }
-            : item,
-        ),
+    case 'ADJUST_QUANTITY': {
+      const target = state.inventory.find((i) => i.id === action.id);
+      if (!target) return state;
+      const updated: InventoryItem = {
+        ...target,
+        quantity: Math.max(0, roundQty(target.quantity + action.delta)),
+        updatedAt: new Date().toISOString(),
       };
+      const inventory = state.inventory.map((item) => (item.id === action.id ? updated : item));
+      const shoppingList = ranOutOfStock(target, updated)
+        ? mergeIntoShoppingList(state.shoppingList, restockRequest(updated))
+        : state.shoppingList;
+      return { ...state, inventory, shoppingList };
+    }
 
     case 'ADD_MEAL':
       return { ...state, meals: [...state.meals, action.meal] };
@@ -123,17 +150,12 @@ function reducer(state: AppState, action: Action): AppState {
         );
         if (
           invItem &&
-          invItem.lowStockBehavior === 'auto_add' &&
-          invItem.quantity <= invItem.lowStockThreshold
+          // Running out completely always queues a restock, regardless of
+          // lowStockBehavior — see restockRequest() above.
+          ((invItem.lowStockBehavior === 'auto_add' && invItem.quantity <= invItem.lowStockThreshold) ||
+            invItem.quantity <= 0)
         ) {
-          shoppingList = mergeIntoShoppingList(shoppingList, {
-            name: invItem.name,
-            quantity: Math.max(1, invItem.lowStockThreshold - invItem.quantity + 1),
-            unit: invItem.unit,
-            category: invItem.category,
-            source: 'auto',
-            linkedInventoryItemId: invItem.id,
-          });
+          shoppingList = mergeIntoShoppingList(shoppingList, restockRequest(invItem));
         }
       }
 
@@ -204,6 +226,7 @@ function reducer(state: AppState, action: Action): AppState {
         category: item.category,
         notes: item.notes,
         linkedInventoryItemId: item.linkedInventoryItemId,
+        store: item.store ?? null,
       };
       return {
         ...state,

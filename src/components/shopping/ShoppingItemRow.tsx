@@ -1,4 +1,4 @@
-import { CheckCircle2, Pencil, ShoppingCart, Sparkles, Trash2, UserRound, Zap } from 'lucide-react';
+import { CheckCircle2, Pencil, ShoppingCart, Sparkles, Store, Trash2, UserRound, Zap } from 'lucide-react';
 import type { ShoppingListItem } from '../../types';
 import { CATEGORY_LABELS, UNIT_LABELS } from '../../types';
 import { Badge } from '../ui/Badge';
@@ -56,6 +56,11 @@ export function ShoppingItemRow({ item, onEdit, onDelete }: ShoppingItemRowProps
               {formatQty(item.quantity)} {UNIT_LABELS[item.unit]}
             </Badge>
             <Badge tone="neutral">{CATEGORY_LABELS[item.category]}</Badge>
+            {item.store && (
+              <Badge tone="purple" icon={<Store size={11} />}>
+                {item.store}
+              </Badge>
+            )}
             <Badge tone={sourceMeta.tone} icon={sourceMeta.icon}>
               {sourceMeta.label}
             </Badge>

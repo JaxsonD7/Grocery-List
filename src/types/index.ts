@@ -105,6 +105,10 @@ export const UNIT_LABELS: Record<Unit, string> = {
 
 export type LowStockBehavior = 'recommend' | 'auto_add' | 'ignore';
 
+// Units a price-per-unit or "total weight/size" figure is normally quoted in —
+// a subset of Unit that excludes container-style units (bag, box, dozen, ...).
+export const WEIGHT_UNITS: Unit[] = ['oz', 'lb', 'g', 'kg', 'ml', 'l'];
+
 export interface InventoryItem {
   id: string;
   name: string;
@@ -117,6 +121,16 @@ export interface InventoryItem {
   expirationDate: string | null; // ISO date string
   notes: string;
   barcode?: string | null;
+  brand?: string | null;
+  store?: string | null; // where it was purchased
+  price?: number | null; // total price paid for this purchase
+  weight?: number | null; // optional total weight/size as purchased, e.g. 2 for a "2 lb" bag
+  weightUnit?: Unit | null; // unit `weight` is measured in; price ÷ weight gives price-per-unit
+  // When true, `quantity` (0-100) and `lowStockThreshold` are read as a percent
+  // remaining instead of a literal count — for items like a bag or jar that are
+  // easier to estimate as "half full" than as a precise unit count.
+  trackByPercent?: boolean;
+  photoUrl?: string | null; // compressed data URL, stored inline (no file backend)
   createdAt: string;
   updatedAt: string;
 }
@@ -150,6 +164,7 @@ export interface ShoppingListItem {
   linkedInventoryItemId: string | null;
   inCart: boolean;
   checked: boolean;
+  store?: string | null; // which store to buy this at
   createdAt: string;
 }
 
@@ -162,6 +177,7 @@ export interface CartItem {
   category: Category;
   notes: string;
   linkedInventoryItemId: string | null;
+  store?: string | null;
 }
 
 export interface MealHistoryItem {

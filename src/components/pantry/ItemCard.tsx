@@ -1,10 +1,11 @@
-import { AlertTriangle, CalendarClock, Minus, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Minus, Package, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react';
 import type { InventoryItem } from '../../types';
 import { CATEGORY_LABELS, LOCATION_LABELS, UNIT_LABELS } from '../../types';
 import { Badge } from '../ui/Badge';
 import { IconButton } from '../ui/Buttons';
 import { getItemFlags } from '../../lib/status';
 import { isAlreadyOnShoppingList } from '../../lib/shoppingList';
+import { pricePerUnitLabel } from '../../lib/pricing';
 import { useAppState } from '../../context/AppContext';
 
 interface ItemCardProps {
@@ -51,11 +52,25 @@ export function ItemCard({ item, onEdit, onDelete }: ItemCardProps) {
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate font-semibold text-neutral-900 dark:text-neutral-100">{item.name}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <Badge tone="neutral">{CATEGORY_LABELS[item.category]}</Badge>
-            <Badge tone="info">{LOCATION_LABELS[item.location]}</Badge>
+        <div className="flex min-w-0 items-start gap-3">
+          {item.photoUrl ? (
+            <img src={item.photoUrl} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+          ) : (
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800">
+              <Package size={18} className="text-neutral-400" />
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-neutral-900 dark:text-neutral-100">{item.name}</p>
+            {(item.brand || item.store) && (
+              <p className="truncate text-xs text-neutral-500">
+                {[item.brand, item.store].filter(Boolean).join(' · ')}
+              </p>
+            )}
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <Badge tone="neutral">{CATEGORY_LABELS[item.category]}</Badge>
+              <Badge tone="info">{LOCATION_LABELS[item.location]}</Badge>
+            </div>
           </div>
         </div>
         <div className="flex shrink-0 gap-1">
@@ -89,8 +104,27 @@ export function ItemCard({ item, onEdit, onDelete }: ItemCardProps) {
         {onList && <Badge tone="purple">On shopping list</Badge>}
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      {item.trackByPercent ? (
+        <div className="mt-3">
+          <div className="mb-1 flex items-center justify-between text-xs text-neutral-500">
+            <span>Remaining</span>
+            <span className="font-medium tabular-nums text-neutral-700 dark:text-neutral-200">
+              {Math.round(item.quantity)}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            className="w-full accent-emerald-600"
+            aria-label={`${item.name} percent remaining`}
+            value={item.quantity}
+            onChange={(e) => dispatch({ type: 'UPDATE_ITEM', id: item.id, updates: { quantity: Number(e.target.value) } })}
+          />
+        </div>
+      ) : (
+        <div className="mt-3 flex items-center gap-2">
           <IconButton
             label={`Decrease ${item.name} quantity`}
             variant="secondary"
@@ -106,8 +140,10 @@ export function ItemCard({ item, onEdit, onDelete }: ItemCardProps) {
             <Plus size={15} />
           </IconButton>
         </div>
+      )}
 
-        {(flags.low || flags.outOfStock) && !onList && (
+      {(flags.low || flags.outOfStock) && !onList && (
+        <div className="mt-2.5">
           <IconButton
             label={`Add ${item.name} to shopping list`}
             variant="primary"
@@ -115,12 +151,19 @@ export function ItemCard({ item, onEdit, onDelete }: ItemCardProps) {
           >
             <ShoppingCart size={16} />
           </IconButton>
-        )}
-      </div>
+        </div>
+      )}
 
-      {item.expirationDate && (
+      {(item.price != null || item.expirationDate) && (
         <p className="mt-2 text-xs text-neutral-500">
-          Expires {new Date(item.expirationDate + 'T00:00:00').toLocaleDateString()}
+          {item.price != null && (
+            <>
+              ${item.price.toFixed(2)}
+              {pricePerUnitLabel(item) && ` (${pricePerUnitLabel(item)})`}
+              {item.expirationDate && ' · '}
+            </>
+          )}
+          {item.expirationDate && `Expires ${new Date(`${item.expirationDate}T00:00:00`).toLocaleDateString()}`}
         </p>
       )}
       {item.notes && <p className="mt-1 text-xs text-neutral-500 italic">{item.notes}</p>}

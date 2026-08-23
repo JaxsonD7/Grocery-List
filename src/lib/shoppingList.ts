@@ -9,6 +9,7 @@ export interface ShoppingListInput {
   notes?: string;
   source: ShoppingListSource;
   linkedInventoryItemId?: string | null;
+  store?: string | null;
 }
 
 function sameItem(a: ShoppingListItem, b: ShoppingListInput): boolean {
@@ -44,6 +45,7 @@ export function mergeIntoShoppingList(
       linkedInventoryItemId: incoming.linkedInventoryItemId ?? null,
       inCart: false,
       checked: false,
+      store: incoming.store ?? null,
       createdAt: new Date().toISOString(),
     };
     return [...list, newItem];
@@ -59,6 +61,7 @@ export function mergeIntoShoppingList(
       notes: incoming.notes ? incoming.notes : item.notes,
       source: bestSource,
       linkedInventoryItemId: item.linkedInventoryItemId ?? incoming.linkedInventoryItemId ?? null,
+      store: item.store ?? incoming.store ?? null,
     };
   });
 }

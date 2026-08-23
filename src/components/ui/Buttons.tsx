@@ -52,7 +52,10 @@ export function IconButton({ variant = 'ghost', label, className = '', children,
     <button
       aria-label={label}
       title={label}
-      className={`inline-flex items-center justify-center rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${VARIANT_CLASSES[variant]} ${className}`}
+      // min-h/w-10 (40px) keeps the tap target close to the ~44px accessibility
+      // guideline even for a small icon — icon-only buttons were previously as
+      // small as ~32px, easy to miss-tap on a phone.
+      className={`inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${VARIANT_CLASSES[variant]} ${className}`}
       {...props}
     >
       {children}

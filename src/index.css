@@ -19,6 +19,12 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Removes the ~300ms tap delay / accidental double-tap-zoom some mobile
+ * browsers still apply to interactive elements without this hint. */
+button, a, input, select, summary {
+  touch-action: manipulation;
+}
+
 input, select, textarea, button {
   font-family: inherit;
 }

@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { useVisualViewportHeight } from '../../hooks/useVisualViewportHeight';
 
 interface ModalProps {
   title: string;
@@ -10,6 +11,12 @@ interface ModalProps {
 }
 
 export function Modal({ title, onClose, children, footer, maxWidthClass = 'max-w-lg' }: ModalProps) {
+  // Driven by the visual viewport (not 100vh/100dvh) so the dialog shrinks
+  // when a mobile on-screen keyboard opens — otherwise the footer's Save
+  // button can end up rendered underneath the keyboard, out of reach.
+  const viewportHeight = useVisualViewportHeight();
+  const maxHeight = Math.min(viewportHeight - 24, 800);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -29,7 +36,8 @@ export function Modal({ title, onClose, children, footer, maxWidthClass = 'max-w
       role="presentation"
     >
       <div
-        className={`w-full ${maxWidthClass} max-h-[92vh] sm:max-h-[85vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl animate-in`}
+        className={`w-full ${maxWidthClass} flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl bg-white dark:bg-neutral-900 shadow-2xl animate-in pb-[env(safe-area-inset-bottom)]`}
+        style={{ maxHeight }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -45,7 +53,7 @@ export function Modal({ title, onClose, children, footer, maxWidthClass = 'max-w
             <X size={20} />
           </button>
         </div>
-        <div className="overflow-y-auto px-5 py-4 grow">{children}</div>
+        <div className="overflow-y-auto overscroll-contain px-5 py-4 grow">{children}</div>
         {footer && (
           <div className="border-t border-neutral-200 dark:border-neutral-800 px-5 py-3 shrink-0 flex justify-end gap-2">
             {footer}
